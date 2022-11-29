@@ -1,0 +1,81 @@
+---
+- name: Create the network configuration file for bond devices
+  become: true
+  template:
+    src: "bond_{{ interfaces_use_nmconnection | ternary('nmconnection', ansible_facts.os_family) }}.j2"
+    dest: "{{ interfaces_net_path }}/{{ interfaces_use_nmconnection | ternary(item.device ~ '.nmconnection', 'ifcfg-' ~ item.device) }}"
+    mode: "{{ interfaces_use_nmconnection | ternary('0600', omit) }}"
+  with_items: '{{ interfaces_bond_interfaces }}'
+  register: bond_result
+  notify:
+    - Check whether /etc/modules-load.d exists
+    - Make sure the bonding module is loaded
+    - Make sure the bonding module is loaded at boot via /etc/modules-load.d
+    - Make sure the bonding module is loaded at boot via /etc/modules
+    - Bounce network devices
+
+- name: Write configuration files for rhel route configuration
+  become: true
+  template:
+    src: 'route_{{ ansible_facts.os_family }}.j2'
+    dest: '{{ interfaces_net_path }}/route-{{ item.device }}'
+  with_items: '{{ interfaces_bond_interfaces }}'
+  when:
+    - item.route is defined
+    - not interfaces_use_nmconnection
+  register: bond_route_add_result
+  notify:
+    - Bounce network devices
+
+- name: Remove configuration files for rhel route configuration
+  become: true
+  file:
+    path: '{{ interfaces_net_path }}/route-{{ item.device }}'
+    state: absent
+  with_items: '{{ interfaces_bond_interfaces }}'
+  when:
+    - item.route is not defined or interfaces_use_nmconnection
+  register: bond_route_del_result
+  notify:
+    - Bounce network devices
+
+- name: Write configuration files for rhel rule configuration
+  become: true
+  template:
+    src: 'rule_{{ ansible_facts.os_family }}.j2'
+    dest: '{{ interfaces_net_path }}/rule-{{ item.device }}'
+  with_items: '{{ interfaces_bond_interfaces }}'
+  when:
+    - item.rules is defined
+    - not interfaces_use_nmconnection
+  register: bond_rule_add_result
+  notify:
+    - Bounce network devices
+
+- name: Remove configuration files for rhel rule configuration
+  become: true
+  file:
+    path: '{{ interfaces_net_path }}/rule-{{ item.device }}'
+    state: absent
+  with_items: '{{ interfaces_bond_interfaces }}'
+  when:
+    - item.rules is not defined or interfaces_use_nmconnection
+  register: bond_rule_del_result
+  notify:
+    - Bounce network devices
+
+- name: Create the network configuration file for slave in the bond devices
+  become: true
+  template:
+    src: "bond_slave_{{ interfaces_use_nmconnection | ternary('nmconnection', ansible_facts.os_family) }}.j2"
+    dest: "{{ interfaces_net_path }}/{{ interfaces_use_nmconnection | ternary(item.1 ~'.nmconnection', 'ifcfg-' ~ item.1) }}"
+    mode: "{{ interfaces_use_nmconnection | ternary('0600', omit) }}"
+  with_subelements:
+    - "{{ interfaces_bond_interfaces }}"
+    - bond_slaves
+  when:
+    - interfaces_bond_setup_slaves
+    - not interfaces_use_nmconnection
+  register: bond_slave_result
+  notify:
+    - Bounce network devices
