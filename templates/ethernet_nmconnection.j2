@@ -8,6 +8,13 @@ interface-name={{ item.device }}
 zone={{ item.zone }}
 {% endif %}
 
+{% for bridge in interfaces_bridge_interfaces %}
+{%   if item.device in bridge.ports %}
+master={{ bridge.device }}
+slave-type=bridge
+{%   endif %}
+{% endfor %}
+
 {% if item.mtu is defined %}
 [ethernet]
 mtu={{ item.mtu }}
@@ -38,7 +45,7 @@ method=disabled
 {%   set route_options = [] %}
 {#       Ignoring dev option - needed in Network Scripts  #}
 {#       as it is not needed in Network Manager           #}
-{%   for option in route.options | default([]) | reject('match', '^dev ') | list %}
+{%   for option in route.options | default([]) | reject('match', '^dev ') %}
 {%     if option is mapping %}
 {#       We're gonna assume it's a mapping of one key with value, and     #}
 {#       since dict2items returns an array, we're selecting the first item #}
